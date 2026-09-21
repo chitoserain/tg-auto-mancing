@@ -1,5 +1,5 @@
 const { sleep } = require("../../../lib/utils");
-const { checkInventory, processActions, extractTrisula, extractKotakCoklat, extractKetupat } = require("../utils/actions");
+const { checkInventory, processActions, extractAllArtifacts } = require("../utils/actions");
 
 async function cleanInventoryLoop(client, peer) {
     console.log("\n[Inventory Check] Starting Inventory Cleaning Loop...");
@@ -10,32 +10,12 @@ async function cleanInventoryLoop(client, peer) {
         pageCount++;
         console.log(`\n[Inventory Check] Checking Page/Batch #${pageCount}`);
 
-        const { favNums, otherNums, hasTrisula, hasKotakCoklat, hasKetupat } = await checkInventory(client, peer);
+        const { favNums, otherNums, hasArtifacts } = await checkInventory(client, peer);
 
-        if (hasTrisula) {
-            console.log("[Inventory Check] Trisula Poseidon detected! Pausing check to extract...");
+        if (hasArtifacts) {
+            console.log("[Inventory Check] Artifact detected! Pausing check to extract all...");
 
-            await extractTrisula(client, peer);
-
-            console.log("\n[Inventory Check] Extraction done. Restarting inventory check for accuracy...");
-
-            continue;
-        }
-
-        if (hasKotakCoklat) {
-            console.log("[Inventory Check] Kotak Coklat detected! Pausing check to extract...");
-
-            await extractKotakCoklat(client, peer);
-
-            console.log("\n[Inventory Check] Extraction done. Restarting inventory check for accuracy...");
-
-            continue;
-        }
-
-        if (hasKetupat) {
-            console.log("[Inventory Check] Ketupat Raja Namrud detected! Pausing check to extract...");
-
-            await extractKetupat(client, peer);
+            await extractAllArtifacts(client, peer);
 
             console.log("\n[Inventory Check] Extraction done. Restarting inventory check for accuracy...");
 
@@ -47,7 +27,13 @@ async function cleanInventoryLoop(client, peer) {
 
         console.log(`[Inventory Check] Found ${totalItems} items.`);
 
-        await processActions(client, peer, { favNums, sellNums });
+        const actionResult = await processActions(client, peer, { favNums, sellNums });
+
+        if (!actionResult.didChange && totalItems >= 20) {
+            console.log("[Inventory Check] Full page contains protected items only. Stopping inventory check.");
+
+            break;
+        }
 
         if (totalItems < 20) {
             console.log("[Inventory Check] Less than 20 items found. Inventory cleared/processed.");

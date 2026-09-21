@@ -6,17 +6,17 @@ async function runBuyUmpan(client, peer) {
     console.log("\n[Buy Umpan] Memulai skenario beli umpan...");
 
     console.log("\nPilih Jenis Umpan:");
-    console.log("1. Umpan Celestial (1M per 10x)");
-    console.log("2. Umpan Mythical (500k per 10x)");
+    console.log("1. Umpan Celestial (7.5M per 100x)");
+    console.log("2. Umpan Mythical (4.5M per 100x)");
 
     const baitChoice = await prompt("Pilih umpan (1-2): ");
 
     let baitName = "Umpan Celestial";
-    let pricePer10 = 1000000;
+    let pricePer100 = 7500000;
 
     if (baitChoice.trim() === '2') {
         baitName = "Umpan Mythical";
-        pricePer10 = 500000;
+        pricePer100 = 4500000;
     }
 
     const countInput = await prompt("Berapa kali beli umpan? ");
@@ -27,7 +27,7 @@ async function runBuyUmpan(client, peer) {
         return;
     }
 
-    console.log(`\n[Buy Umpan] Akan membeli '${baitName}' sebanyak ${count} kali (Qty: 10x per transaksi).`);
+    console.log(`\n[Buy Umpan] Akan membeli '${baitName}' sebanyak ${count} kali (Qty: 100x per transaksi).`);
 
     const equipInput = await prompt("Apakah umpan mau dipakai langsung setelah beli? (y/n): ");
     const shouldEquip = equipInput.toLowerCase().trim() === 'y';
@@ -131,7 +131,7 @@ async function runBuyUmpan(client, peer) {
             for (const msg of qtyMsgs) {
                 if (msg.buttons) {
                     const flat = msg.buttons.flat();
-                    const found = flat.find(b => b.text && b.text.trim() === "10x");
+                    const found = flat.find(b => b.text && b.text.trim() === "💰 100x");
 
                     if (found) {
                         qtyBtn = found;
@@ -141,15 +141,15 @@ async function runBuyUmpan(client, peer) {
             }
 
             if (!qtyBtn) {
-                throw new Error("Tombol '10x' tidak ditemukan.");
+                throw new Error("Tombol '100x' tidak ditemukan.");
             }
 
             qtyBtn.client = client;
 
             await qtyBtn.click({ sharePhone: false });
 
-            totalCoins += pricePer10;
-            totalBait += 30;
+            totalCoins += pricePer100;
+            totalBait += 300;
 
             console.log(`[Buy Umpan] Transaksi sukses. Total Koin: ${totalCoins.toLocaleString()}, Total Umpan: ${totalBait}`);
 

@@ -1,3 +1,5 @@
+const { exec } = require("child_process");
+const { Api } = require("telegram");
 const detectType = require("./detect_type");
 const { solveMath, solveEmojiCount } = require("./local_solvers");
 const askGroq = require("../../../services/groq_client");
@@ -6,36 +8,35 @@ const { sleep } = require("../../../lib/utils");
 async function handleVerification(client, peer, message) {
     console.log(`\n[Security] Verification detected!`);
 
-    // Extract the question text (removing the "Verifikasi keamanan..." header if needed, 
-    // but the detectors usually work on the whole text or we can pass the whole text)
     const text = message.message || "";
 
-    // Detect type
+    if (text.toLowerCase().includes("verifikasi diperlukan")) {
+        await clickButtonByText(client, message, "Verifikasi Sekarang", false);
+
+        const isTest = process.env.NODE_ENV === "test";
+        const sleepDuration = isTest ? 10 : 30000;
+        console.log(`[Security] Waiting ${sleepDuration}ms after clicking mini app verification...`);
+        await sleep(sleepDuration);
+        return;
+    }
+
     const type = detectType(text);
     console.log(`[Security] Type detected: ${type}`);
 
     let answer = null;
 
     try {
-        // Solve based on type
-        if (type === 'math') {
-            // Extract math expression roughly or let the solver handle extraction if it was robust
-            // The provided solver expects "expr", but detectType checks regex.
-            // Let's extract the math part specifically if needed, or pass text if solver handles it.
-            // Looking at local_solvers.js, solveMath takes 'expr' and does `replace` then `eval`.
-            // It might fail if text contains extra chars.
-            // Let's try to extract the math part: digit space operator space digit
-            const match = text.match(/([\d]+\s*[+\-×x*]\s*[\d]+)/);
+        if (type === "math") {
+            const match = text.match(/([\d]+\s*[+\-Ã—x*]\s*[\d]+)/);
             if (match) {
                 answer = solveMath(match[0]);
             } else {
                 console.log("[Security] math detected but regex failed to extract, trying Groq fallback.");
                 answer = await askGroq(text);
             }
-        } else if (type === 'emoji_count') {
+        } else if (type === "emoji_count") {
             answer = solveEmojiCount(text);
         } else {
-            // 'sequence', 'emoji_select', 'unknown' -> Use AI
             console.log(`[Security] Using AI solver for ${type}...`);
             answer = await askGroq(text);
         }
@@ -47,16 +48,13 @@ async function handleVerification(client, peer, message) {
             return;
         }
 
-        // Find and click button
         await clickButtonByText(client, message, String(answer));
-
-
     } catch (e) {
         console.error(`[Security] Error solving: ${e.message}`);
     }
 }
 
-async function clickButtonByText(client, message, answerText) {
+async function clickButtonByText(client, message, answerText, exactMatch = true) {
     if (!message.buttons) {
         console.log("[Security] No buttons found in message.");
         return;
@@ -64,22 +62,53 @@ async function clickButtonByText(client, message, answerText) {
 
     const flatButtons = message.buttons.flat();
 
-    // Find exact match or match containing the answer
-    // For math/numbers, exact match is safest (trimmed)
-    const targetButton = flatButtons.find(btn =>
-        btn.text && btn.text.toString().trim() == answerText.toString().trim()
-    );
+    const targetButton = flatButtons.find(btn => {
+        const btnText = btn.text ? btn.text.toString().trim() : "";
+        const targetText = answerText.toString().trim();
+        return exactMatch ? btnText === targetText : btnText.includes(targetText);
+    });
 
     if (targetButton) {
         console.log(`[Security] Clicking button: "${targetButton.text}"`);
 
-        // Ensure client is attached if not already (common pattern in GramJS)
-        if (!targetButton.client) {
-            targetButton.client = client;
-        }
+        const btnRaw = targetButton.button || {};
+        const className = btnRaw.className || btnRaw.constructor.name || "";
 
-        // Use the button's own click method
-        await targetButton.click({ sharePhone: false });
+        if (className === "KeyboardButtonWebView" || className === "KeyboardButtonSimpleWebView") {
+            try {
+                console.log(`[Security] Requesting authenticated Web App URL for: "${targetButton.text}"...`);
+                const chat = await message.getInputChat();
+                const bot = await client.getInputEntity(message.fromId || message.peerId);
+
+                const result = await client.invoke(
+                    new Api.messages.RequestWebView({
+                        peer: chat,
+                        bot: bot,
+                        url: btnRaw.url,
+                        platform: "android",
+                    })
+                );
+
+                const webAppUrl = result.url;
+                // console.log(`[Security] Authenticated Web App URL retrieved: ${webAppUrl}`);
+                // console.log(`[Security] Opening Web App in your default browser...`);
+                exec(`start "" "${webAppUrl}"`, (err) => {
+                    if (err) {
+                        console.error(`[Security] Failed to open browser: ${err.message}`);
+                    } else {
+                        // console.log(`[Security] Browser opened successfully.`);
+                    }
+                });
+            } catch (err) {
+                console.error(`[Security] Error requesting Web App URL: ${err.message}`);
+            }
+        } else {
+            if (!targetButton.client) {
+                targetButton.client = client;
+            }
+
+            await targetButton.click({ sharePhone: false });
+        }
     } else {
         console.log(`[Security] Button with text "${answerText}" not found. Available buttons:`);
         flatButtons.forEach(b => process.stdout.write(`[${b.text}] `));

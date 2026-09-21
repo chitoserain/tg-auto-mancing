@@ -68,7 +68,7 @@ async function selectBot() {
         console.log("Pilihan tidak valid, menggunakan bot pertama sebagai UTAMA.");
     }
 
-    const availableBackups = bots.filter(b => b !== primary);
+    const availableBackups = bots;
 
     if (availableBackups.length > 0) {
         console.log('\nPilih Bot CADANGAN (Opsional):');

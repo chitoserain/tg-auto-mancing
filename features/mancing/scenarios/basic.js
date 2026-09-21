@@ -1,13 +1,14 @@
 const { waitForAnyText } = require("../../../lib/receiver");
 const { sleep, getEnv } = require("../../../lib/utils");
-const { sendMancing, checkInventory, processActions, extractTrisula, extractKotakCoklat, extractKetupat } = require("../utils/actions");
+const { sendMancing, checkInventory, processActions, extractAllArtifacts } = require("../utils/actions");
 const { cleanInventoryLoop } = require("./inventory_check");
 const { handleVerification } = require("../utils/verification");
 
 async function runBasic(client, primaryPeer, backupPeer = null) {
     const finishRegex = /SESI MANCING SELESAI!/i;
     const fullRegex = /Inventory.*Penuh/i;
-    const verificationRegex = /Verifikasi keamanan/i;
+    const verificationRegex = /Verifikasi (keamanan|Diperlukan)/i;
+    const blockedRegex = /AKUN DIBLOKIR SEMENTARA/i;
 
     const fishingTimes = Number(getEnv("FISHING_TIMES", 4));
     const inventoryCheckCount = Number(getEnv("INVENTORY_CHECK", 1));
@@ -18,6 +19,7 @@ async function runBasic(client, primaryPeer, backupPeer = null) {
     let currentPeer = primaryPeer;
     let count = 0;
     let timeoutRetries = 0;
+    let consecutiveVerifications = 0;
 
     while (true) {
         count++;
@@ -27,21 +29,28 @@ async function runBasic(client, primaryPeer, backupPeer = null) {
         await sendMancing(client, currentPeer);
 
         try {
-            const result = await waitForAnyText(client, currentPeer, [finishRegex, fullRegex, verificationRegex], {
-                timeoutMs,
-                onNewMessage: async (m) => {
-                    try {
-                        if (m.media && m.media.className === 'MessageMediaDocument') {
-                            console.log(`[Basic] Special item (GIF) detected on-the-fly! Pinning message for myself...`);
-                            await client.pinMessage(currentPeer, m.id, { pmOneside: true });
-                        }
-                    } catch (err) {
-                        console.error(`[Basic] Failed to pin message: ${err.message}`);
-                    }
-                }
-            });
+            const result = await waitForAnyText(client, currentPeer, [finishRegex, fullRegex, verificationRegex, blockedRegex], { timeoutMs });
 
             timeoutRetries = 0;
+
+            if (blockedRegex.test(result.message)) {
+                console.error("\n[FATAL] AKUN DIBLOKIR SEMENTARA DETECTED! Stopping program.");
+                break;
+            }
+
+            if (verificationRegex.test(result.message)) {
+                consecutiveVerifications++;
+                console.log(`[Security] Verification detected (Consecutive: ${consecutiveVerifications}/3)`);
+                if (consecutiveVerifications >= 3) {
+                    console.error("\n[FATAL] Verification message appeared 3 times consecutively (indicates failure). Stopping program.");
+                    break;
+                }
+                await handleVerification(client, currentPeer, result);
+                continue;
+            }
+
+            // Reset consecutive verifications on successful fishing result
+            consecutiveVerifications = 0;
 
             if (fullRegex.test(result.message)) {
                 console.log("[Basic] Inventory Full detected! Switching to Inventory Cleaning Loop...");
@@ -51,12 +60,20 @@ async function runBasic(client, primaryPeer, backupPeer = null) {
                 continue;
             }
 
-            if (verificationRegex.test(result.message)) {
-                await handleVerification(client, currentPeer, result);
-                continue;
+            if (finishRegex.test(result.message)) {
+                try {
+                    const recentMsgs = await client.getMessages(currentPeer, { limit: 3 });
+                    for (const m of recentMsgs) {
+                        if (m.media && m.media.className !== 'MessageMediaWebPage' && Math.abs(m.id - result.id) <= 2) {
+                            console.log(`[Basic] Special item (GIF) detected! Pinning message for myself...`);
+                            await client.pinMessage(currentPeer, m.id, { pmOneside: true });
+                            break;
+                        }
+                    }
+                } catch (err) {
+                    console.error(`[Basic] Failed to pin message: ${err.message}`);
+                }
             }
-
-
         } catch (e) {
             timeoutRetries++;
 
@@ -88,24 +105,12 @@ async function runBasic(client, primaryPeer, backupPeer = null) {
 
             for (let i = 0; i < inventoryCheckCount; i++) {
                 try {
-                    const { favNums, otherNums, hasTrisula, hasKotakCoklat, hasKetupat } = await checkInventory(client, currentPeer);
+                    const { favNums, otherNums, hasArtifacts } = await checkInventory(client, currentPeer);
 
-                    if (hasTrisula) {
-                        console.log("[Basic] Trisula Poseidon detected! Pausing check to extract...");
+                    if (hasArtifacts) {
+                        console.log("[Basic] Artifact detected! Pausing check to extract all...");
 
-                        await extractTrisula(client, currentPeer);
-
-                        console.log("[Basic] Extraction done. Restarting inventory check for accuracy...");
-
-                        i--;
-
-                        continue;
-                    }
-
-                    if (hasKotakCoklat) {
-                        console.log("[Basic] Kotak Coklat detected! Pausing check to extract...");
-
-                        await extractKotakCoklat(client, currentPeer);
+                        await extractAllArtifacts(client, currentPeer);
 
                         console.log("[Basic] Extraction done. Restarting inventory check for accuracy...");
 
@@ -114,19 +119,14 @@ async function runBasic(client, primaryPeer, backupPeer = null) {
                         continue;
                     }
 
-                    if (hasKetupat) {
-                        console.log("[Basic] Ketupat Raja Namrud detected! Pausing check to extract...");
+                    const totalItems = favNums.length + otherNums.length;
+                    const actionResult = await processActions(client, currentPeer, { favNums, sellNums: otherNums });
 
-                        await extractKetupat(client, currentPeer);
+                    if (!actionResult.didChange && totalItems >= 20) {
+                        console.log("[Basic] Full inventory page contains protected items only. Skipping remaining checks.");
 
-                        console.log("[Basic] Extraction done. Restarting inventory check for accuracy...");
-
-                        i--;
-
-                        continue;
+                        break;
                     }
-
-                    await processActions(client, currentPeer, { favNums, sellNums: otherNums });
                 } catch (e) {
                     console.error(`[Basic] Error during inventory check: ${e.message}. Skipping this check.`);
                 }

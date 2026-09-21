@@ -1,6 +1,6 @@
 const { waitForAnyText, latestMessageId } = require("../../../lib/receiver");
 const { sleep, getEnv, randomSleep } = require("../../../lib/utils");
-const { sendMancing, checkInventory, processActions, extractTrisula, extractKotakCoklat, extractKetupat } = require("../utils/actions");
+const { sendMancing, checkInventory, processActions, extractAllArtifacts } = require("../utils/actions");
 const { sendMessage } = require("../../../lib/sender");
 const { cleanInventoryLoop } = require("./inventory_check");
 const { handleVerification } = require("../utils/verification");
@@ -8,7 +8,8 @@ const { handleVerification } = require("../utils/verification");
 async function runVIP(client, primaryPeer, backupPeer = null, useBoost = false) {
     const finishRegex = /SESI MANCING SELESAI!/i;
     const fullRegex = /Inventory.*Penuh/i;
-    const verificationRegex = /Verifikasi keamanan/i;
+    const verificationRegex = /Verifikasi (keamanan|Diperlukan)/i;
+    const blockedRegex = /AKUN DIBLOKIR SEMENTARA/i;
 
     const fishingTimes = Number(getEnv("VIP_FISHING_TIMES", 1));
     const inventoryCheckCount = Number(getEnv("VIP_INVENTORY_CHECK", 2));
@@ -19,6 +20,7 @@ async function runVIP(client, primaryPeer, backupPeer = null, useBoost = false) 
     let currentPeer = primaryPeer;
     let count = 0;
     let timeoutRetries = 0;
+    let consecutiveVerifications = 0;
 
     while (true) {
         count++;
@@ -34,22 +36,28 @@ async function runVIP(client, primaryPeer, backupPeer = null, useBoost = false) 
         }
 
         try {
-            const result = await waitForAnyText(client, currentPeer, [finishRegex, fullRegex, verificationRegex], {
-                timeoutMs,
-                sinceId: startId,
-                onNewMessage: async (m) => {
-                    try {
-                        if (m.media && m.media.className === 'MessageMediaDocument') {
-                            console.log(`[VIP] Special item (GIF) detected on-the-fly! Pinning message for myself...`);
-                            await client.pinMessage(currentPeer, m.id, { pmOneside: true });
-                        }
-                    } catch (err) {
-                        console.error(`[VIP] Failed to pin message: ${err.message}`);
-                    }
-                }
-            });
+            const result = await waitForAnyText(client, currentPeer, [finishRegex, fullRegex, verificationRegex, blockedRegex], { timeoutMs, sinceId: startId });
 
             timeoutRetries = 0;
+
+            if (blockedRegex.test(result.message)) {
+                console.error("\n[FATAL] AKUN DIBLOKIR SEMENTARA DETECTED! Stopping program.");
+                break;
+            }
+
+            if (verificationRegex.test(result.message)) {
+                consecutiveVerifications++;
+                console.log(`[Security] Verification detected (Consecutive: ${consecutiveVerifications}/3)`);
+                if (consecutiveVerifications >= 3) {
+                    console.error("\n[FATAL] Verification message appeared 3 times consecutively (indicates failure). Stopping program.");
+                    break;
+                }
+                await handleVerification(client, currentPeer, result);
+                continue;
+            }
+
+            // Reset consecutive verifications on successful fishing result
+            consecutiveVerifications = 0;
 
             if (fullRegex.test(result.message)) {
                 console.log("[VIP] Inventory Full detected! Switching to Inventory Cleaning Loop...");
@@ -59,12 +67,20 @@ async function runVIP(client, primaryPeer, backupPeer = null, useBoost = false) 
                 continue;
             }
 
-            if (verificationRegex.test(result.message)) {
-                await handleVerification(client, currentPeer, result);
-                continue;
+            if (finishRegex.test(result.message)) {
+                try {
+                    const recentMsgs = await client.getMessages(currentPeer, { limit: 3 });
+                    for (const m of recentMsgs) {
+                        if (m.media && m.media.className !== 'MessageMediaWebPage' && Math.abs(m.id - result.id) <= 2) {
+                            console.log(`[VIP] Special item (GIF) detected! Pinning message for myself...`);
+                            await client.pinMessage(currentPeer, m.id, { pmOneside: true });
+                            break;
+                        }
+                    }
+                } catch (err) {
+                    console.error(`[VIP] Failed to pin message: ${err.message}`);
+                }
             }
-
-
         } catch (e) {
             timeoutRetries++;
 
@@ -97,24 +113,12 @@ async function runVIP(client, primaryPeer, backupPeer = null, useBoost = false) 
             console.log(`[VIP] Post-Fishing Check [${i + 1}/${inventoryCheckCount}]`);
 
             try {
-                const { favNums, otherNums, hasTrisula, hasKotakCoklat, hasKetupat } = await checkInventory(client, currentPeer);
+                const { favNums, otherNums, hasArtifacts } = await checkInventory(client, currentPeer);
 
-                if (hasTrisula) {
-                    console.log("[VIP] Trisula Poseidon detected! Pausing check to extract...");
+                if (hasArtifacts) {
+                    console.log("[VIP] Artifact detected! Pausing check to extract all...");
 
-                    await extractTrisula(client, currentPeer);
-
-                    console.log("[VIP] Extraction done. Restarting inventory check for accuracy...");
-
-                    i--;
-
-                    continue;
-                }
-
-                if (hasKotakCoklat) {
-                    console.log("[VIP] Kotak Coklat detected! Pausing check to extract...");
-
-                    await extractKotakCoklat(client, currentPeer);
+                    await extractAllArtifacts(client, currentPeer);
 
                     console.log("[VIP] Extraction done. Restarting inventory check for accuracy...");
 
@@ -123,19 +127,14 @@ async function runVIP(client, primaryPeer, backupPeer = null, useBoost = false) 
                     continue;
                 }
 
-                if (hasKetupat) {
-                    console.log("[VIP] Ketupat Raja Namrud detected! Pausing check to extract...");
+                const totalItems = favNums.length + otherNums.length;
+                const actionResult = await processActions(client, currentPeer, { favNums, sellNums: otherNums });
 
-                    await extractKetupat(client, currentPeer);
+                if (!actionResult.didChange && totalItems >= 20) {
+                    console.log("[VIP] Full inventory page contains protected items only. Skipping remaining checks.");
 
-                    console.log("[VIP] Extraction done. Restarting inventory check for accuracy...");
-
-                    i--;
-
-                    continue;
+                    break;
                 }
-
-                await processActions(client, currentPeer, { favNums, sellNums: otherNums });
             } catch (e) {
                 console.error(`[VIP] Error during inventory check: ${e.message}. Skipping this check.`);
             }

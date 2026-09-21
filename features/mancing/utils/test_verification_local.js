@@ -1,10 +1,18 @@
 const path = require('path');
+process.env.NODE_ENV = 'test';
 require('dotenv').config({ path: path.join(__dirname, '../../../.env') });
 const { handleVerification } = require("./verification");
 
 // Mock Client
 const mockClient = {
-    sendMessage: async (peer, text) => console.log(`[MockClient] Sending to ${peer}:`, text)
+    sendMessage: async (peer, text) => console.log(`[MockClient] Sending to ${peer}:`, text),
+    getInputEntity: async (peer) => ({ id: 123456789, className: "InputUser" }),
+    invoke: async (request) => {
+        console.log(`[MockClient] Invoked request:`, request.className || request.constructor.name);
+        return {
+            url: "https://fishid.online/verify?tgWebAppData=mock_data_123&tgWebAppVersion=7.0"
+        };
+    }
 };
 
 // Start Function to Create Button
@@ -67,6 +75,30 @@ Lanjutkan pola:
     ]
 };
 
+// Mock Message for Mini App Verification
+const miniAppVerificationMessage = {
+    id: 99887,
+    date: Math.floor(Date.now() / 1000),
+    peerId: "mock_bot_peer",
+    message: `🔒 Verifikasi Diperlukan
+
+Tap tombol di bawah untuk verifikasi cepat. Setelah berhasil, lanjutkan dengan /mancing.`,
+    getInputChat: async () => ({ id: 987654321, className: "InputPeerUser" }),
+    buttons: [
+        [
+            {
+                text: "🔒 Verifikasi Sekarang",
+                button: {
+                    className: "KeyboardButtonWebView",
+                    text: "🔒 Verifikasi Sekarang",
+                    url: "https://t.me/fish_it_bot/app?startapp=verification_hash_xyz_12345"
+                },
+                click: async () => console.log(`[MockButton] Clicked WebApp button to open mini app`)
+            }
+        ]
+    ]
+};
+
 async function runTests() {
     console.log("--- Testing Math ---");
     await handleVerification(mockClient, "bot", mathMessage);
@@ -76,6 +108,9 @@ async function runTests() {
 
     console.log("\n--- Testing Sequence ---");
     await handleVerification(mockClient, "bot", sequenceMessage);
+
+    console.log("\n--- Testing Mini App Verification ---");
+    await handleVerification(mockClient, "bot", miniAppVerificationMessage);
 }
 
 runTests();
