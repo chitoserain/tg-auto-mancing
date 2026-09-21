@@ -1,0 +1,19 @@
+{
+  "name": "auto-mancing",
+  "version": "1.0.0",
+  "description": "Automation farming bot Telegram menggunakan GramJS",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node index.js",
+    "read-group": "node index.js read-group"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "groq-sdk": "^0.37.0",
+    "telegram": "^2.22.2"
+  }
+}

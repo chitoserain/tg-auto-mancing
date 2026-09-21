@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-06-07T13:29:58.068Z",
+  "messageId": 1260341,
+  "peerId": "8505069240",
+  "date": 1780838997,
+  "text": "🔒 Verifikasi Diperlukan\n\nTap tombol di bawah untuk verifikasi cepat. Setelah berhasil, lanjutkan dengan /mancing.",
+  "buttons": [
+    {
+      "rowIndex": 0,
+      "colIndex": 0,
+      "text": "🔒 Verifikasi Sekarang",
+      "type": "KeyboardButtonWebView",
+      "url": "https://fishid.online/verify",
+      "data": null,
+      "query": null,
+      "isMiniApp": true,
+      "authenticatedUrl": "https://fishid.online/verify#tgWebAppData=query_id%3DAAFu23J0AwAAAG7bcnT0QRC5%26user%3D%257B%2522id%2522%253A8396135278%252C%2522first_name%2522%253A%2522evernight%2522%252C%2522last_name%2522%253A%2522%2522%252C%2522username%2522%253A%2522evernightstarrail%2522%252C%2522language_code%2522%253A%2522en%2522%252C%2522allows_write_to_pm%2522%253Atrue%252C%2522photo_url%2522%253A%2522https%253A%255C%252F%255C%252Ft.me%255C%252Fi%255C%252Fuserpic%255C%252F320%255C%252Fx9mt2rZPSkvSpbUYsKFsH_WKm7sSuvK1CM2gmpxnu_xHgMzocPB80vPE36_bbced.svg%2522%257D%26auth_date%3D1780838998%26signature%3D4RAyoTg3CgqjoJBSBrlC1kUTK3VBvAflYKnkPXQzsa7S0mYt315bEE8vw2H7gw0SPwhlydrgbZpNLe8-2otHDw%26hash%3D1c449615863278785302c8ed3278e7e833d38516fa8ea839645151b19ee3d016&tgWebAppVersion=8.0&tgWebAppPlatform=android"
+    }
+  ],
+  "authenticatedUrl": "https://fishid.online/verify#tgWebAppData=query_id%3DAAFu23J0AwAAAG7bcnT0QRC5%26user%3D%257B%2522id%2522%253A8396135278%252C%2522first_name%2522%253A%2522evernight%2522%252C%2522last_name%2522%253A%2522%2522%252C%2522username%2522%253A%2522evernightstarrail%2522%252C%2522language_code%2522%253A%2522en%2522%252C%2522allows_write_to_pm%2522%253Atrue%252C%2522photo_url%2522%253A%2522https%253A%255C%252F%255C%252Ft.me%255C%252Fi%255C%252Fuserpic%255C%252F320%255C%252Fx9mt2rZPSkvSpbUYsKFsH_WKm7sSuvK1CM2gmpxnu_xHgMzocPB80vPE36_bbced.svg%2522%257D%26auth_date%3D1780838998%26signature%3D4RAyoTg3CgqjoJBSBrlC1kUTK3VBvAflYKnkPXQzsa7S0mYt315bEE8vw2H7gw0SPwhlydrgbZpNLe8-2otHDw%26hash%3D1c449615863278785302c8ed3278e7e833d38516fa8ea839645151b19ee3d016&tgWebAppVersion=8.0&tgWebAppPlatform=android"
+}
